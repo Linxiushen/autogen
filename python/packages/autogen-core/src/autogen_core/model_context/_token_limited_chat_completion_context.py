@@ -21,7 +21,13 @@ def _is_function_call_message(message: LLMMessage) -> bool:
 
 
 def _remove_middle_message(messages: List[LLMMessage]) -> None:
-    """Remove the middle message without splitting an adjacent tool call/result pair."""
+    """Remove the middle message without splitting an adjacent tool call/result pair.
+
+    A tool call and the result that answers it are removed together so the truncated
+    context never keeps one half of the pair. When the middle message is not part of
+    such an adjacent pair, a single message is removed instead; see the comment on the
+    fallback below for why that is safe.
+    """
     middle_index = len(messages) // 2
     message = messages[middle_index]
 
@@ -34,6 +40,14 @@ def _remove_middle_message(messages: List[LLMMessage]) -> None:
             del messages[middle_index - 1 : middle_index + 1]
             return
 
+    # Fallback: the middle message is an ordinary message, a tool call that is not
+    # immediately followed by its result, or a tool result that is not immediately
+    # preceded by its call. Removing the single message here is deliberate, not an
+    # oversight: in the latter two cases the message is already unpaired within this
+    # list, so there is no pair left to keep together, and dropping the unmatched half
+    # moves the context towards a valid request rather than away from one. Keeping it
+    # would leave the model with a call nothing answers or a result nothing asked for,
+    # which is what the pairing above exists to prevent.
     messages.pop(middle_index)
 
 
